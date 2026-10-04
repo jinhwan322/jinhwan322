@@ -145,6 +145,18 @@ flowchart LR
 - 수동 모드에서는 슬롯을 눌러 대기열에 넣고, 오토 모드나 적군은 자동으로 넣음
 - 한 편에서 **한 번에 한 명만** 필살기를 쓰고(대기열 맨 앞), 아군 슬롯에는 대기 순번을 표시
 - 스턴·침묵에 걸리거나 사망하면 대기열에서 빠짐
+  ```csharp
+  // SkillObserver.StartActiveSkill — 게이지가 차면 대기열에 올리고, 맨 앞 차례일 때만 발동
+  if (acCoolTime <= 0 && IdleGameManager.instance.IsPossibleUseSkill(skillUser.GetOwnerType()))
+  {
+      IdleOwner queueOwner = IdleGameManager.instance.UseSkillOwner();
+      if (queueOwner == skillUser)
+          skillUser.useActiveSkill = true;            // 내 차례 → 발동
+      else if (queueOwner == null && CanAutoQueueActiveSkill())
+          skillUser.idleGameMgr.AddSkillQueue(skillUser);   // 오토 / 적군은 자동 등록
+  }
+  acCoolTime -= Time.fixedDeltaTime;                  // SP 게이지 진행
+  ```
 
 ### 3. 필살기 연출과 전투 시간 분리 — [`IdleOwner.cs`](https://github.com/jinhwan322/OVE_document/blob/main/Assets/Scripts/Battle/IdleOwner.cs), [`IdleGameManager.cs`](https://github.com/jinhwan322/OVE_document/blob/main/Assets/Scripts/Battle/IdleGameManager.cs)
 - 필살기를 쓰면 전투 틱을 멈추고 Chronos 글로벌 클럭으로 유닛 / 이펙트 시간을 연출용으로 전환
@@ -170,6 +182,22 @@ flowchart LR
   2. 타겟 조건 (가까운 순, 공격력 / 방어력 / HP 높은·낮은 순, 특정 상태이상 보유)
   3. 포지션 순서 (예: 전열 → 중열 → 후열)
   4. 속성 상성 (유리한 속성 우선)
+  ```csharp
+  // 단계별 비교: 앞 단계에서 우열이 갈리면 바로 결정
+  targetList.Sort((target_1, target_2) =>
+  {
+      int state = CompareByProvocation(target_1, target_2);
+      if (state != 0) return state;
+
+      state = CompareByCondition(target_1, target_2, targetCondition, targetConditionDetail);
+      if (state != 0) return state;
+
+      state = CompareByPosOrder(target_1, target_2, posOrder);
+      if (state != 0) return state;
+
+      return CompareByElement(target_1, target_2);
+  });
+  ```
 
 ### 6. 버프 / 상태이상 시스템 — [`ObjectBase.cs`](https://github.com/jinhwan322/OVE_document/blob/main/Assets/Scripts/Battle/ObjectBase.cs)
 - 스킬 버프, 조건부 버프, 장비 버프, 장비 스킬 버프를 따로 관리하고, `원본 스탯 + 버프 합계`로 최종 스탯 계산

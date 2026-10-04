@@ -117,6 +117,22 @@ classDiagram
 ### 3. NGUI depth 정규화 — [`UIPanelBase.cs`](https://github.com/jinhwan322/goddesskiss_document/blob/main/Assets/Scripts/Common/UI/UIPanelBase.cs)
 - **문제**: 화면을 여닫을 때마다 depth를 올리는 방식은 값이 계속 커지고, 겹친 UI의 정렬 순서가 꼬임
 - **해결**: 열린 UI를 `LinkedList`로 관리하고, 최상단으로 올릴 때 전체 패널을 depth 순으로 정렬한 뒤 **0부터 연속된 값으로 다시 매김**. 고정 UI(`holdDepth`, `dontMoveToFront`)는 대상에서 제외
+  ```csharp
+  // depth 순으로 정렬한 뒤, 같은 depth끼리 묶어 0부터 연속된 값으로 다시 매김
+  System.Array.Sort(list, UIPanel.CompareFunc);
+  int start = 0;
+  int current = list[0].depth;
+  foreach (UIPanel p in list)
+  {
+      if (p.depth == current)
+          p.depth = start;
+      else
+      {
+          current = p.depth;
+          p.depth = ++start;
+      }
+  }
+  ```
 
 ### 4. 팝업 스택과 코루틴 기반 결과 대기 — [`UIPopup.cs`](https://github.com/jinhwan322/goddesskiss_document/blob/main/Assets/Scripts/Common/UI/UIPopup.cs)
 - `openedPopups` 스택으로 최상단 팝업을 추적하고, 팝업이 닫히면 다음 팝업에 최상단 상태를 넘겨줌

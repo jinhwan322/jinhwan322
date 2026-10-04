@@ -162,6 +162,23 @@ flowchart LR
 - 나머지 캐릭터는 메인 캐릭터 기준 **대열 슬롯**(중심 → 상하좌우 → 대각선 → 바깥)을 따라가며, 손을 떼면 슬롯을 다시 계산해 제자리로 복귀
 - 자동 모드에서는 적이 남아 있는 가장 가까운 스폰 포인트로 이동
 - 존(구역) 경계를 넘으면 마을 / 필드 모드 전환, 대화 이벤트, 날씨 연출을 처리
+  ```csharp
+  // 메인 캐릭터 기준 대열 슬롯: 중심 → 상하좌우 → 대각선 → 바깥
+  private static readonly Vector2[] SlotOffsets =
+  {
+      Vector2.zero,
+      Vector2.up, Vector2.down, Vector2.left, Vector2.right,
+      Vector2.left + Vector2.up, Vector2.right + Vector2.down, Vector2.right + Vector2.up, Vector2.left + Vector2.down,
+      Vector2.up * 2, Vector2.down * 2, Vector2.right * 2,
+  };
+
+  // 손을 떼면 스쿼드 방향 기준으로 슬롯 위치를 다시 계산
+  public void SetSquadCharacterPosition()
+  {
+      for (int i = 0; i < _offsets.Count; i++)
+          _offsets[i].SetPosition(transform.TransformPoint(SlotOffsets[i] * SlotSpacing));
+  }
+  ```
 
 ### 2. 많은 유닛을 위한 탐색 / 경로 최적화 — [`BaseUnit.cs`](https://github.com/jinhwan322/ktf_document/blob/main/Assets/Scripts/Unit/BaseUnit.cs)
 - **문제**: 필드에 아군 파티와 몬스터가 많아 매 프레임 타겟 탐색과 A* 경로 계산을 하면 부하가 큼
@@ -169,6 +186,18 @@ flowchart LR
   - 타겟 탐색은 `OverlapCircle` + 직선 거리(`sqrMagnitude`) 비교로 A* 없이 처리하고, 현재 타겟이 살아 있으면 5프레임마다만 다시 찾음
   - PolyNav 내부의 매 프레임 재탐색을 끄고, 목적지 갱신을 10프레임 주기로 직접 관리
   - 전투 유닛과 채집물이 같이 있으면 전투 유닛을 우선 타겟으로 선택
+  ```csharp
+  // 목적지 갱신을 N프레임 주기로 제한해 A* 재계산 부하를 줄임
+  protected void MoveToTargetNav(Vector3 targetVec, bool immediate = false)
+  {
+      if (immediate || ++_navFrameCounter >= NavDestinationUpdateInterval)   // 10프레임
+      {
+          _navFrameCounter = 0;
+          _agent.SetDestination(targetVec);
+      }
+      AgentDirection();
+  }
+  ```
 
 ### 3. Spine 이벤트 기반 다단 타격과 범위 미리보기 — [`StateMachine.cs`](https://github.com/jinhwan322/ktf_document/blob/main/Assets/Scripts/Battle/StateMachine.cs)
 - 스킬 애니메이션의 `callEffect` 이벤트 시간을 미리 뽑아 두고 **FixedUpdate 고정 틱 시간**과 비교해 타격 판정
@@ -187,6 +216,32 @@ flowchart LR
 - 번들 요청 URL에서 빌드 시점의 CDN 주소(개발 / 라이브)를 떼어 내고 현재 다운로드 URL로 바꿔서, **번들을 다시 빌드하지 않고 CDN을 전환**
 - DB, Spine, Prefab, Atlas Texture를 라벨 단위로 패치하고, 다운로드 크기 확인 → 다운로드 → 진행도 표시 흐름을 이벤트로 알림
 - 플랫폼별 카탈로그를 직접 로드하고 예전 로케이터는 제거, 로드 후 같은 번들의 예전 캐시 버전을 정리
+  ```csharp
+  // 번들 요청 URL 변환: 빌드 시점에 박힌 CDN 주소(개발 / 라이브)를 떼고 현재 DownloadURL로 교체
+  private string TransformURL(IResourceLocation location)
+  {
+      if (location.ResourceType != typeof(IAssetBundleResource))
+          return location.InternalId;
+
+      string internalId = location.InternalId;
+      string relativePath = internalId;
+
+      string[] knownBases = { DownloadController.DEV_CDN_URL, DownloadController.LIVE_CDN_URL };
+      foreach (var baseUrl in knownBases)
+      {
+          if (internalId.StartsWith(baseUrl))
+          {
+              relativePath = internalId.Substring(baseUrl.Length);
+              break;
+          }
+      }
+
+      return DownloadURL.TrimEnd('/') + "/" + relativePath.TrimStart('/');
+  }
+
+  // 초기화 시 Addressables에 등록
+  Addressables.ResourceManager.InternalIdTransformFunc = TransformURL;
+  ```
 
 ## 파일 구성
 
